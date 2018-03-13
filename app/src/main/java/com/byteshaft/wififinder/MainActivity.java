@@ -95,6 +95,14 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
     }
 
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == AppGlobals.LOCATION_ENABLE) {
+            start();
+        }
+    }
+
     private void start() {
         wiFiScanReceiver = new WiFiScanReceiver();
         wifiName = new ArrayList<>();
@@ -105,7 +113,9 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     @Override
     public void onStop() {
         super.onStop();
-        unregisterReceiver(wiFiScanReceiver);
+        if (wiFiScanReceiver != null) {
+            unregisterReceiver(wiFiScanReceiver);
+        }
     }
 
     @Override
