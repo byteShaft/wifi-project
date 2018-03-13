@@ -24,6 +24,10 @@
             </intent-filter>
         </activity>
         <activity android:name=".WifiStrength"/>
+        <activity android:name=".SelectWifiActivity"/>
+        <activity android:name=".MainAdmin"/>
+        <activity android:name=".SelectClass"/>
     </application>
+
 
 </manifest>

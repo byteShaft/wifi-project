@@ -3,77 +3,118 @@ package com.byteshaft.wififinder;
 import android.Manifest;
 import android.content.BroadcastReceiver;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.net.wifi.ScanResult;
 import android.net.wifi.WifiManager;
+import android.os.Bundle;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
+import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
-import android.os.Bundle;
 import android.util.Log;
-import android.view.Menu;
-import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
-import android.widget.Button;
+import android.widget.EditText;
 import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import org.json.JSONException;
-import org.json.JSONObject;
-
 import java.util.ArrayList;
 import java.util.List;
 
-public class MainActivity extends AppCompatActivity implements View.OnClickListener{
+/**
+ * Created by s9iper1 on 3/14/18.
+ */
+
+public class SelectWifiActivity extends AppCompatActivity implements View.OnClickListener{
 
     private static final String TAG = "WiFiDemo";
     public WifiManager wifi;
-    public Button nextButton;
     private WiFiScanReceiver wiFiScanReceiver;
     private ListView listView;
-    private ArrayList<Wifi> wifiName;
+    private ArrayList<Wifi> wifiArrayList;
     private Adapter arrayAdapter;
     public static final int MY_PERMISSIONS_REQUEST_READ_LOCATION = 1001;
-    private TextView location;
-    private boolean foreground = false;
-    private WifiDatabase wifiDatabase;
+    private String selectedBuilding;
+    private String selectedLevel;
+    private AlertDialog alertDialog;
+    private static SelectWifiActivity instance;
+
+    public static SelectWifiActivity getInstance() {
+        return instance;
+    }
 
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
-        foreground = true;
-        wifiDatabase = new WifiDatabase(getApplicationContext());
+        setContentView(R.layout.select_wifi);
+        instance = this;
         listView =  findViewById(R.id.list_view);
-        nextButton = findViewById(R.id.get_rssi_button);
-        location = findViewById(R.id.location);
-        nextButton.setOnClickListener(this);
-    }
-
-    @Override
-    public boolean onCreateOptionsMenu(Menu menu) {
-        getMenuInflater().inflate(R.menu.admin_module_menu, menu);
-        return true;
-    }
-
-    @Override
-    public boolean onOptionsItemSelected(MenuItem item) {
-        switch (item.getItemId()) {
-            case R.id.admin_menu:
-                startActivity(new Intent(getApplicationContext(), MainAdmin.class));
-                return true;
-
-                default: return false;
-
+        selectedBuilding = getIntent().getStringExtra("building");
+        selectedLevel = getIntent().getStringExtra("level");
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION)
+                != PackageManager.PERMISSION_GRANTED) {
+            // Permission is not granted   ActivityCompat.requestPermissions(thisActivity,
+            ActivityCompat.requestPermissions(this,
+                    new String[]{(Manifest.permission.ACCESS_COARSE_LOCATION)},
+                    MY_PERMISSIONS_REQUEST_READ_LOCATION);
+        } else {
+            if (Helpers.locationEnabled(getApplicationContext())) {
+                start();
+            } else {
+                Helpers.dialogForLocationEnableManually(this);
+            }
         }
+        listView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
+            @Override
+            public void onItemClick(AdapterView<?> adapterView, View view, int i, long l) {
+                final Wifi wifi = wifiArrayList.get(i);
+                Log.i("TAG", "wifi " + wifi.getSsid());
+                final View dialogView = getLayoutInflater().inflate(R.layout.layout_dialog, null);
+                alertDialog = new AlertDialog.Builder(SelectWifiActivity.this).create();
+                alertDialog.setTitle("Select Wifi name");
+                alertDialog.setCancelable(false);
+                alertDialog.setMessage("please desired name for this wifi");
+                final EditText etComments = (EditText) dialogView.findViewById(R.id.etComments);
+
+                alertDialog.setButton(AlertDialog.BUTTON_POSITIVE, "OK", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        if (etComments.getText().toString().trim().isEmpty()) {
+                            Toast.makeText(SelectWifiActivity.this, "please enter desired name", Toast.LENGTH_SHORT).show();
+                            return;
+                        }
+                        Intent intent = new Intent(getApplicationContext(), SelectClass.class);
+                        intent.putExtra("wifi_name", etComments.getText().toString());
+                        intent.putExtra("wifi", wifi);
+                        intent.putExtra("level", selectedLevel);
+                        intent.putExtra("building", selectedBuilding);
+                        startActivity(intent);
+
+                    }
+                });
+
+
+                alertDialog.setButton(AlertDialog.BUTTON_NEGATIVE, "Cancel", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        alertDialog.dismiss();
+                    }
+                });
+
+
+                alertDialog.setView(dialogView);
+                alertDialog.show();
+            }
+        });
     }
 
     @Override
@@ -118,7 +159,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
     private void start() {
         wiFiScanReceiver = new WiFiScanReceiver();
-        wifiName = new ArrayList<>();
+        wifiArrayList = new ArrayList<>();
         wifi = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
         wifi.startScan();
     }
@@ -132,30 +173,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     }
 
     @Override
-    protected void onPause() {
-        super.onPause();
-        foreground = false;
-    }
-
-    @Override
     protected void onResume() {
         super.onResume();
-        foreground = true;
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION)
-                != PackageManager.PERMISSION_GRANTED) {
-            // Permission is not granted   ActivityCompat.requestPermissions(thisActivity,
-            ActivityCompat.requestPermissions(this,
-                    new String[]{(Manifest.permission.ACCESS_COARSE_LOCATION)},
-                    MY_PERMISSIONS_REQUEST_READ_LOCATION);
-
-
-        } else {
-            if (Helpers.locationEnabled(getApplicationContext())) {
-                start();
-            } else {
-                Helpers.dialogForLocationEnableManually(this);
-            }
-        }
         registerReceiver(wiFiScanReceiver, new IntentFilter(
                 WifiManager.SCAN_RESULTS_AVAILABLE_ACTION));
     }
@@ -163,7 +182,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     @Override
     public void onClick(View view) {
         Intent intent = new Intent(this, WifiStrength.class);
-        intent.putExtra("wifi", wifiName);
+        intent.putExtra("wifi", wifiArrayList);
         startActivity(intent);
     }
 
@@ -175,55 +194,22 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         public void onReceive(Context c, Intent intent) {
             Log.i(TAG, "receiver called");
             Log.i(TAG, "scan results size " + wifi.getScanResults().size());
-            ScanResult bestSignal = null;
-            if (wifiName.size() > 0 ) {
-                wifiName.clear();
+            if (wifiArrayList.size() > 0 ) {
+                wifiArrayList.clear();
             }
             if (arrayAdapter != null) {
                 arrayAdapter.notifyDataSetChanged();
             }
             List<ScanResult> results = wifi.getScanResults();
             for (ScanResult result : results) {
-                if (bestSignal == null
-                        || WifiManager.compareSignalLevel(bestSignal.level, result.level) < 0)
-                    bestSignal = result;
                 Wifi wifi = new Wifi();
                 wifi.setSsid(result.SSID);
                 Log.i(TAG, "ssid " + result.SSID);
                 wifi.setStrength(result.level);
-                wifiName.add(wifi);
+                wifiArrayList.add(wifi);
             }
-            arrayAdapter = new Adapter(getApplicationContext(), wifiName);
+            arrayAdapter = new Adapter(getApplicationContext(), wifiArrayList);
             listView.setAdapter(arrayAdapter);
-            String message = String.format("%s networks found. %s is the strongest.",
-                    results.size(), bestSignal.SSID);
-            Log.i("TAG", message);
-            Log.i("TAG", "" + wifiDatabase.getRecordsByName(bestSignal.SSID));
-            JSONObject jsonObject = wifiDatabase.getRecordsByName(bestSignal.SSID);
-            StringBuilder stringBuilder = new StringBuilder();
-            try {
-                stringBuilder.append("Class: ");
-                stringBuilder.append(jsonObject.getString("class"));
-                stringBuilder.append("\n");
-                stringBuilder.append("Level: ");
-                stringBuilder.append(jsonObject.getString("level"));
-                stringBuilder.append("\n");
-                stringBuilder.append("Building: ");
-                stringBuilder.append(jsonObject.getString("building"));
-                stringBuilder.append("\n");
-                stringBuilder.append("Desired Name: ");
-                stringBuilder.append(jsonObject.getString("desired_name"));
-                stringBuilder.append("\n");
-                stringBuilder.append("Wifi SSID: ");
-                stringBuilder.append(jsonObject.getString("name"));
-                stringBuilder.append("\n");
-
-            } catch (JSONException e) {
-                e.printStackTrace();
-            }
-
-            location.setText(stringBuilder.toString());
-
         }
 
     }
@@ -269,3 +255,4 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         TextView strength;
     }
 }
+
